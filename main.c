@@ -66,26 +66,23 @@ uint64_t create_iocb_array_from_pkt(
 {
     *pcap_hdr_cb = malloc(sizeof(struct iocb));
     memset(*pcap_hdr_cb, 0, sizeof(struct iocb));
-    // *pcap_pkt_cb = malloc(sizeof(struct iocb));
-    // memset(*pcap_pkt_cb, 0, sizeof(struct iocb));
+    *pcap_pkt_cb = malloc(sizeof(struct iocb));
+    memset(*pcap_pkt_cb, 0, sizeof(struct iocb));
 
-    g_staged_packets[0].iov_base = pcap_pkt_hdr;
-    g_staged_packets[1].iov_len = 16;
-    g_staged_packets[2].iov_base = pkt;
     g_staged_packets[3].iov_len = pcap_pkt_hdr->len;
 
     (*pcap_hdr_cb)->aio_fildes = fd;
-    (*pcap_hdr_cb)->aio_lio_opcode = IOCB_CMD_PWRITEV; //IOCB_CMD_PWRITEV
-    (*pcap_hdr_cb)->aio_buf = (uint64_t)&g_staged_packets[0];
+    (*pcap_hdr_cb)->aio_lio_opcode = IOCB_CMD_PWRITE; //IOCB_CMD_PWRITEV
+    (*pcap_hdr_cb)->aio_buf = pcap_pkt_hdr;
     (*pcap_hdr_cb)->aio_offset = start_offset;
-    (*pcap_hdr_cb)->aio_nbytes = 2 * sizeof(struct iovec); //2 writes per packet
+    (*pcap_hdr_cb)->aio_nbytes = 16;
 
 
-    // (*pcap_pkt_cb)->aio_fildes = fd;
-    // (*pcap_pkt_cb)->aio_lio_opcode = IOCB_CMD_PWRITE;//IOCB_CMD_PWRITEV
-    // (*pcap_pkt_cb)->aio_buf = (uint64_t)pkt;
-    // (*pcap_pkt_cb)->aio_offset = start_offset+16;
-    // (*pcap_pkt_cb)->aio_nbytes = pcap_pkt_hdr->len;
+    (*pcap_pkt_cb)->aio_fildes = fd;
+    (*pcap_pkt_cb)->aio_lio_opcode = IOCB_CMD_PWRITE;//IOCB_CMD_PWRITEV
+    (*pcap_pkt_cb)->aio_buf = (uint64_t)pkt;
+    (*pcap_pkt_cb)->aio_offset = start_offset+16;
+    (*pcap_pkt_cb)->aio_nbytes = pcap_pkt_hdr->len;
     return start_offset + 16 + pcap_pkt_hdr->len;
 }
 
@@ -130,11 +127,11 @@ int main(int argc, char *argv[])
   int fd = open("foo", O_WRONLY|O_CREAT, 0777);
   if (fd) {
        int mode = 0;
-      //  ret = fallocate(fd,mode,0,g_max_file_sz);
-      //  if (ret < 0) {
-      //     perror("fallocate failed");
-      //     return -1;
-      //  }
+       ret = fallocate(fd,mode,0,g_max_file_sz);
+       if (ret < 0) {
+          perror("fallocate failed");
+          return -1;
+       }
        memset(&myctx, 0, sizeof(myctx));
        ret = io_setup(1, &myctx);
        if (ret < 0) {
@@ -144,8 +141,9 @@ int main(int argc, char *argv[])
 
       uint64_t offset = create_iocb_array_from_pkt(fd, data, &pcap_pkt_hdr, 0, &cbs[0],&cbs[1]);
 
-       ret = io_submit(myctx, 1, &cbs[0]);
-       if (ret != 1) {
+       int n = 2;
+       ret = io_submit(myctx, n, &cbs[0]);
+       if (ret != n) {
          if (ret < 0)
            perror("io_submit error");
          else
