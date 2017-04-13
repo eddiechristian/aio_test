@@ -52,7 +52,7 @@
 
 #define BUILD_BUG_IF(c) ((void) sizeof(char[1 - 2 * !!(c)]))
 
-#define TESTFILE_SIZE (4096 * 5200)
+#define TESTFILE_SIZE (1024*1024*1024)
 #define IORTX_SIZE (1024 * 4)
 #define NUM_EVENTS 128
 
@@ -205,15 +205,15 @@ static long test_writev(aio_context_t ctx, int fd, int iovcnt, int afd) {
 		return -1;
 	}
 	fprintf(stdout, "submitted %ld requests\n", r);
-	
-	
+
+
 	r = io_getevents(ctx, 1, NUM_EVENTS, events, &tmo);
 	if (r > 0) {
 		for (j = 0; j < r; j++) {
 			fprintf(stderr, "event[%d]: .res=%d .res2=%d\n", j, events[j].res, events[j].res2);
 		}
 	}
-	
+
 	free(iocb);
 	free(piocb);
 
@@ -235,7 +235,7 @@ int main(int ac, char **av) {
 		return 2;
 	}
 	fprintf(stdout, "done! eventfd = %d\n", afd);
-	if (io_setup(TESTFILE_SIZE / IORTX_SIZE + 256, &ctx)) {
+	if (io_setup(1, &ctx)) {
 		perror("io_setup");
 		return 3;
 	}
@@ -243,17 +243,17 @@ int main(int ac, char **av) {
 		perror(testfn);
 		return 4;
 	}
-	ftruncate(fd, TESTFILE_SIZE);
+  int mode =0;
+  int ret = fallocate(fd, mode, 0, TESTFILE_SIZE);
 
 	fcntl(afd, F_SETFL, fcntl(afd, F_GETFL, 0) | O_NONBLOCK);
 
 	test_writev(ctx, fd, 128, afd);
-	
-        io_destroy(ctx);
+
+  io_destroy(ctx);
 	close(fd);
 	close(afd);
 	//remove(testfn);
 
 	return 0;
 }
-
